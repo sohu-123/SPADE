@@ -109,7 +109,7 @@ svg_list = pd.read_csv('path/to/svg_list.csv', index_col=0).index
 ### 3. Run the pipeline
 
 ```bash
-python run_pdac_analysis.py
+python Example-SPADE.py
 ```
 
 All outputs will be written to a new folder: `result/SCC_experiment_YYYYMMDD_HHMMSS/`
