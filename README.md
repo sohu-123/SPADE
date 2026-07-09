@@ -1,186 +1,174 @@
-### Official Implementation of Paper: Detection of Spatially Aberrant Cells in Spatial Transcriptomics Data by Conformal Prediction
 
-Pipeline：
+# SPADE: Detection of Spatially Aberrant Cells in Spatial Transcriptomics Data
+
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
+[![Paper](https://img.shields.io/badge/Paper-GPB-red.svg)](https://www.sciencedirect.com/journal/genomics-proteomics-and-bioinformatics)
+
 
 ![Pipeline](pipeline.png)
 
+**SPADE** is a computational framework designed to integrate single-cell RNA sequencing (scRNA-seq) and spatial transcriptomics (ST) data to quantitatively characterize and detect spatially aberrant cells. By leveraging a variational autoencoder (VAE) coupled with Gaussian Mixture Modeling (GMM) and Conformal Prediction, SPADE enables uncertainty-calibrated identification of cells that deviate from normal tissue architecture.
 
-Here is the complete `README.md` content inside a single Markdown code block. You can click the **Copy** button in the top-right corner of the block (in most interfaces) or simply select all the text inside and paste it into your `README.md` file.
+## 📖 Overview
 
-```markdown
-# PDAC Spatial Transcriptomics Integration & Aberrant Cell Detection
+In healthy tissues, cells are organized with precise spatial coordination. Disruptions to this organization—manifesting as spatially aberrant cells—are closely associated with disease initiation and progression (e.g., cancer).
 
-This repository provides a complete pipeline for integrating single‑cell RNA‑seq (scRNA‑seq) and spatial transcriptomics (ST) data, predicting cell locations, and identifying aberrant spots using **conformal prediction**. It is based on the framework from Zhao et al. (2022) *Nature Computational Science* and extended with a novel uncertainty‑aware outlier detection module.
+SPADE addresses the challenge of detecting these aberrations by:
+1.  **Joint Embedding:** Mapping scRNA-seq cells and ST spots into a shared latent space using a VAE.
+2.  **Deconvolution:** Modeling ST spots as a weighted combination of cell-type embeddings (GMM components) to mitigate batch effects.
+3.  **Spatial Mapping:** Learning a mapping from latent embeddings to physical coordinates.
+4.  **Uncertainty Quantification:** Utilizing **Conformal Prediction** to generate statistically rigorous prediction intervals, identifying spots whose true location deviates significantly from their predicted location.
 
-## Table of Contents
-- [Overview](#overview)
-- [Method](#method)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Input Data](#input-data)
-- [Output Structure](#output-structure)
-- [Configuration](#configuration)
-- [Citation](#citation)
-- [License](#license)
+## ✨ Key Features
 
----
+*   **Uncertainty-Calibrated Detection:** Unlike methods relying on arbitrary thresholds, SPADE uses conformal prediction to provide statistically principled detection with controlled false discovery rates.
+*   **Integration:** Seamlessly integrates scRNA-seq and Spatial Transcriptomics data.
+*   **Deconvolution:** Performs spatial deconvolution to resolve cell-type composition within spots.
+*   **Robustness:** Demonstrated superior performance in identifying biologically meaningful aberrant spots in both simulated and real-world datasets (e.g., Human Squamous Cell Carcinoma).
 
-## Overview
+## 🛠️ Installation
 
-- **Integration**: Adversarial domain translation aligns scRNA‑seq and ST data into a shared latent space.
-- **Localization**: A separate encoder predicts spatial coordinates for every cell/spot.
-- **Aberrant Detection**: Conformal prediction provides per‑spot confidence intervals; spots with prediction errors exceeding the interval are flagged as "aberrant" – potentially indicating technical artefacts or biologically distinct regions.
+To run SPADE, you will need Python (3.8+) and the following dependencies:
+- Python ≥ 3.8
+- PyTorch ≥ 1.10
+- Scanpy, anndata, pandas, numpy, scikit‑learn, scipy
+- Other dependencies: tqdm, POT (for optimal transport), matplotlib, seaborn
 
-The implementation is fully modular, supports 3‑fold cross‑validation, and saves all intermediate outputs to timestamped directories to avoid overwriting.
-
----
-
-## Method
-
-1. **Preprocessing**  
-   - Highly variable gene selection (Seurat v3) on both datasets.
-   - Overlap of HVGs is used for dimensionality reduction (PCA).
-   - Spatial coordinates are normalised to [0,1].
-
-2. **Integration Network** (GAN‑based)  
-   - Encoders (`E_A`, `E_B`) map each modality to a shared latent space.
-   - Generators (`G_A`, `G_B`) reconstruct the original space from latent codes.
-   - Discriminators (`D_A`, `D_B`) enforce distribution alignment.
-   - Losses include reconstruction, cycle‑consistency, sliced Wasserstein distance, and a GMM‑based latent regularisation.
-
-3. **Localization Network**  
-   - An encoder (`E_s`) takes the concatenation of latent code and SVG (spatially variable gene) expression to predict 2D coordinates.
-   - Trained with L1 loss and SWD between predicted and true coordinates.
-
-4. **Conformal Prediction for Aberrant Detection**  
-   - For each fold, the ST data is split into training (2/3), calibration (1/6) and test (1/6).
-   - Non‑conformity score is based on the ratio of prediction error to local latent‑space density (k‑nearest neighbour average).
-   - Quantile calibration yields per‑spot confidence intervals; spots outside the interval are marked aberrant.
-
-5. **Cross‑Validation**  
-   - 3‑fold split ensures every spot is evaluated exactly once.
-   - Final predictions are aggregated from the three folds.
-
----
-
-## Installation
-
-### Requirements
-- Python 3.8+
-- PyTorch 1.10+
-- ScanPy 1.9+
-- scikit‑learn
-- POT (Python Optimal Transport)
-- NumPy, Pandas, SciPy
-- tqdm
-
-You can install all dependencies with:
-
+### Install from source
 ```bash
-pip install torch scanpy scikit-learn pot numpy pandas scipy tqdm
+git clone https://github.com/sohu-123/SPADE.git
+cd SPADE
+pip install -r requirements.txt
 ```
-
-### Clone the repository
-
-```bash
-git clone https://github.com/yourusername/pdac-integration.git
-cd pdac-integration
-```
-
 ---
 
-## Usage
+## 🚀 Quick Start
+
+A complete example script `Example-SPADE.py` is provided in the repository. It demonstrates the full pipeline on PDAC (pancreatic ductal adenocarcinoma) data.
 
 ### 1. Prepare your data
+- **scRNA‑seq**: AnnData object (cells × genes) with `.X` as expression matrix.
+- **ST**: AnnData object (spots × genes) with `.obsm['spatial']` as 2D coordinates.
+- **SVG list**: A list of spatially variable genes (e.g., from SpaGCN) to guide feature selection.
 
-- **scRNA‑seq**: AnnData object with `X` (counts) and `obs` containing cell type annotations (optional).
-- **ST**: AnnData object with `X` (counts), `obs` containing pixel coordinates (`x`, `y`), and `obsm['spatial']` with the original spatial coordinates.
-
-### 2. Modify file paths
-
-In the `main()` function of the script, update the following paths:
-
+### 2. Configure paths
+Edit the configuration section in `Example-SPADE.py`:
 ```python
-adata_ST = sc.read_h5ad('path/to/your_ST.h5ad')
-adata_sc = sc.read('path/to/your_sc.h5ad')
-svg_list = pd.read_csv('path/to/svg_list.csv', index_col=0).index
+INPUT_ADATA_ST = "/path/to/your/enhanced_ST.h5ad"
+INPUT_ADATA_SC = "/path/to/your/scRNA.h5ad"
+INPUT_SVG_LIST = "/path/to/svg_list.csv"
+OUTPUT_BASE = "result/PDAC_final"
 ```
 
 ### 3. Run the pipeline
-
 ```bash
 python Example-SPADE.py
 ```
 
-All outputs will be written to a new folder: `result/SCC_experiment_YYYYMMDD_HHMMSS/`
-
-### 4. Output files
-
-- `fold_*/` – per‑fold models, embeddings, and evaluation results.
-- `adata_ST_final.h5ad` – ST AnnData with added columns: `final_aberrant`, `final_confidence`, `final_lambda`.
-- `final_predict.npy` – final predicted coordinates for all spots.
-- `all_results.npz` – all intermediate tensors for further analysis.
-- `spot_info_PDAC.txt` – tab‑separated file with pixel coordinates, prediction error, aberrant flag, and non‑conformity score (mapped back to original ST layout).
+This will:
+- Preprocess and embed both datasets
+- Train the VAE‑GMM model (3‑fold cross‑validation)
+- Predict spatial coordinates for each spot
+- Apply conformal prediction to detect aberrant spots
+- Save results (predicted coordinates, aberrant labels, deconvolution scores, latent embeddings) in `OUTPUT_BASE/results/`
 
 ---
 
-## Input Data Format
+## 📁 Output Files
+
+After running, the following files are created in the output directory:
 
 | File | Description |
 |------|-------------|
-| `adata_sc.h5ad` | scRNA‑seq data (genes × cells) |
-| `adata_ST.h5ad` | ST data (genes × spots) with `obs[['x','y']]` and `obsm['spatial']` |
-| `svg_list.csv` | CSV with a single column (index) naming spatially variable genes |
-
-**Important**: The ST `obsm['spatial']` is used for training coordinates. The script normalises it internally.
-
----
-
-## Configuration
-
-You can adjust model hyperparameters inside the `Model3` constructor:
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `batch_size` | Training batch size | 200 |
-| `train_epoch` | Number of training epochs | 3000 |
-| `n_latent` | Dimension of shared latent space | 20 |
-| `lambdacos` | Weight for cosine similarity loss | 10 |
-| `lambdaSWD` | Weight for sliced Wasserstein loss | 5 |
-| `lambdalat` | Weight for coordinate prediction loss | 10 |
-| `alpha` | Significance level for conformal prediction | 0.05 |
-| `k_neighbors` | Number of neighbours for λ calculation | 15 |
+| `adata_total.h5ad` | Combined AnnData with latent embeddings and predicted spatial coordinates |
+| `adata_sc.h5ad` / `adata_ST.h5ad` | Normalized single‑cell and ST data |
+| `adata_sc_keep.h5ad` | Filtered scRNA‑seq cells that localize within tissue (resolution="low") |
+| `trans_plan.csv` | Transport plan (if OT enabled) between cells and spots |
+| `cluster_score.csv` | Cell‑type contribution scores per spot |
+| `latent.csv` | Latent embeddings with batch labels |
+| `spot_info_PDAC_final.txt` | Spot‑level metadata including aberrant flag |
+| `eval_out_final.npz` | Coordinates, embeddings, and predictions for each cross‑validation fold |
 
 ---
 
-## Citation
+## 📊 Usage Example (Code Snippet)
 
-If you use this code in your research, please cite the original work:
+```python
+import scanpy as sc
+import numpy as np
+from SPADE import Model3, conformal_prediction
 
-> Zhao, J. et al. (2022) Adversarial domain translation networks for integrating large-scale atlas-level single-cell datasets. *Nature Computational Science* 2(5):317-330.
+# Load data
+adata_sc = sc.read("scRNA.h5ad")
+adata_st = sc.read("ST.h5ad")
+svg_list = pd.read_csv("svg.csv", index_col=0).index
 
-And this repository (if applicable):
+# Initialize model
+model = Model3(
+    resolution="low",
+    batch_size=200,
+    train_epoch=3000,
+    sf_coord=50,
+    rad_cutoff=1.2,
+    seed=1234,
+    lambdacos=10,
+    lambdaSWD=5,
+    lambdalat=10,
+    device="cpu"
+)
 
-```bibtex
-@misc{pdac-integration,
-  author = {Your Name},
-  title = {PDAC Integration and Aberrant Detection},
-  year = {2026},
-  publisher = {GitHub},
-  journal = {GitHub Repository},
-  howpublished = {\url{https://github.com/yourusername/pdac-integration}}
-}
+# Preprocess and train
+K, clusters = model.preprocess(svg_list, adata_sc, adata_st)
+model.train(training_idx_rna, training_idx_st)
+
+# Evaluate and get embeddings
+mu, phi, sigma, z_A, z_B, m_A, m_B = model.eval2()
+
+# Detect aberrant spots
+aberrant, confidence, lambda_calib, pred_coords, true_coords = conformal_prediction(
+    true_coords=adata_st.obsm['spatial'],
+    z_B=z_B,
+    m_B=m_B,
+    calib_index=val_idx,
+    test_index=test_idx,
+    alpha=0.05,
+    k_neighbors=15
+)
 ```
 
 ---
 
-## License
+## 📈 Performance Highlights
+
+- **Simulated mouse brain**: AUC = 0.991, AUPR = 8.1, recall = 90.5% with FPR < 5%.
+- **Human SCC**: Identified 22 aberrant spots enriched in tumor‑specific keratin (TSK) regions and domains with high spatial variability. Detected genes (e.g., *EIF2AK1*, *TMSB15B*) associated with stress response and migration.
+- **Xenium breast cancer**: Detected 6,544 aberrant cells enriched at invasive fronts and DCIS regions, capturing biologically meaningful heterogeneity.
+- **State‑of‑the‑art comparison**: SPADE outperforms STALocator and scSpace in spatial mapping accuracy across multiple thresholds.
+
+---
+
+## 🧪 Customization
+
+### Adjusting conformal prediction
+- `alpha` – controls the nominal false discovery rate (default 0.05).
+- `k_neighbors` – number of neighbors for local variability estimation (default 15).
+- Increase `alpha` for stricter detection; decrease for more conservative.
+
+### Model hyperparameters
+Key parameters in `Model3`:
+- `resolution` – `"low"` (coarse mapping) or `"high"` (enhanced single‑cell resolution, requires optimal transport).
+- `train_epoch` – training epochs (default 3000; increase for larger datasets).
+- `lambdaGAN`, `lambdacos`, `lambdaAE`, `lambdaLA`, `lambdaSWD` – loss weights for different objectives.
+
+---
+
+
+## 📜 License
 
 This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## Contact
+**Happy spatial anomaly hunting!** 🧬🔬
 
-For questions or issues, please open a GitHub issue or contact [your.email@example.com](mailto:your.email@example.com).
-```
